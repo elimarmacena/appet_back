@@ -1,1 +1,1 @@
-web:gunicorn launcher:appet-back
+web: gunicorn launcher:appet-back
