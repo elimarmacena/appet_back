@@ -1,1 +1,1 @@
-web: gunicorn launcher:app
+web: gunicorn launcher

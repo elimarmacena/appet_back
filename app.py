@@ -30,7 +30,7 @@ from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = b'\xc2\xbf\xbf\xe8\x82LA\xd3\xe8\xdd\x84U\xeb\xec\x825uq\xee\x96\x19#i\xe2' #os.urandom(24)
-app.run()
+#app.run()
 CORS(app)
 session_time_minute = 60
 
