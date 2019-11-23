@@ -257,8 +257,6 @@ def postAddress(current_user):
 		'state':request.form['estado'],
 		'num':request.form['numero']
 	}
-
-	print(request.form)
 	
 	response_request = None
 	try:
@@ -365,7 +363,6 @@ def getServiceSchedule():
 	is_day_empty = is_parameter_empty(request.args.get('weekDay'))
 	week_day = request.args.get('weekDay') if not is_day_empty else None
 
-	print(request.args.get)
 
 
 	if(is_schedule_empty and is_begin_empty and is_end_empty and is_day_empty and is_periodo_empty):
@@ -622,6 +619,37 @@ def postUser():
 	except Exception as err:
 		return erro_interno(err)
 
+# Rota para criacao de usuario google
+@app.route('/guser', methods=['POST'])
+def postGoogleUser():
+	try:
+		is_name_empty = is_parameter_empty(request.form['nomeUser'])
+		name_user = request.form['nomeUser'] if not is_name_empty else None
+
+		is_email_empty = is_parameter_empty(request.form['emailUser'])
+		email_user = request.form['emailUser'] if not is_email_empty else None
+		
+
+		is_about_empty = is_parameter_empty(request.form['g_id'])
+		google_id = request.form['g_id'] if not is_about_empty else None
+		
+	except Exception as err:
+		return handle_invalid(err)
+	user_data = {'name': name_user,
+				'email': email_user,
+				'googleid': google_id}
+	
+	data_result = None
+	try:
+		data_result = b_user.createGoogleUser(user_data)
+		if (data_result == False):
+			raise Exception('Erro no Banco de Dados')
+	except Exception as err:
+		return erro_interno(err)
+	
+	token = jwt.encode({'user_id': data_result['user_id'], 'email_user' : data_result['email'], 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=session_time_minute)}, app.secret_key)		
+	return json.dumps({'success': True, 'token': token.decode('UTF-8')}), 200, {'ContentType': 'application/json'}
+
 #Apagar um usuario nao significa remover da base e sim desativar
 @app.route('/remove/user', methods=['POST'])
 @token_required
@@ -642,8 +670,8 @@ def deleteUser(current_user):
 
 # Rota para busca de usuario
 @app.route('/user', methods=['GET'])
-@token_required
-def getUser(current_user):    
+#@token_required
+def getUser():    
 	is_name_empty =  is_parameter_empty(request.args.get('nomeUser'))
 	name_user = request.args.get('nomeUser') if not is_name_empty else None    
 
@@ -655,8 +683,12 @@ def getUser(current_user):
 
 	is_id_empty = is_parameter_empty(request.args.get('userId'))
 	user_id = request.args.get('userId') if not is_id_empty else None
+	
+	is_gid_empty = is_parameter_empty(request.args.get('g_id'))
+	g_id = request.args.get('g_id') if not is_gid_empty else None
 
-	if( is_name_empty and is_email_empty and is_about_empty and is_id_empty):
+
+	if( is_name_empty and is_email_empty and is_about_empty and is_id_empty and is_gid_empty):
 		print('empty')
 		return json.dumps({'success': False}), 200, {'ContentType': 'application/json'}
 	else:
@@ -664,7 +696,8 @@ def getUser(current_user):
 			'user_name': name_user,
 			'email_user': email_user,
 			'about_user': about_user,
-			'user_id': user_id
+			'user_id': user_id,
+			'googleid':g_id
 		}
 		data_result = b_user.findUsers(user_query)
 	return json.dumps({'success': True,
@@ -759,6 +792,7 @@ def postContratacao(current_user):
 		have_empty_data = have_empty_data or  is_token_empty or is_buyer_empty or is_service_empty or is_method_empty or is_status_empty
 		if(have_empty_data):
 			raise Exception('[CONTRATACAO - POST] Empty required parameter')
+		
 	except Exception as err:
 		print(err)
 		handle_invalid(err)
