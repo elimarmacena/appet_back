@@ -30,9 +30,50 @@ from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = b'\xc2\xbf\xbf\xe8\x82LA\xd3\xe8\xdd\x84U\xeb\xec\x825uq\xee\x96\x19#i\xe2' #os.urandom(24)
-#app.run()
+#app.run(debug=True)
 CORS(app)
 session_time_minute = 60
+
+def admin_required(AdminOnly = False):
+	def admin_decorator(f):
+		@wraps(f)
+		def wrapper(*args, **kwargs):
+			token = None
+
+			if 'x-access-token' in request.headers:
+				token = request.headers['x-access-token']
+			#
+
+			if not token:
+				print(" >>>>>> admin_required() = Nenhum Usuário Logado!!")
+				return json.dumps({'token_required': True}), 200, {'ContentType': 'application/json'}
+				# return  jsonify({'message': 'Token inexistente. O usuário deve fazer login.'}), 401
+			#
+
+			try:
+				dataToken = jwt.decode(token, app.secret_key)
+				current_user = b_user.verifyToken(dataToken['user_id'], dataToken['email_user'])
+
+				if not current_user['admin']:
+					print(" >>>>>> admin_required() = Usuario não é admin. : " + current_user['email'])	
+					return json.dumps({'token_required': True}), 200, {'ContentType': 'application/json'}
+
+				print(" >>>>>> admin_required() = Usuário Logado: " + current_user['email'])	
+
+			except Exception as e:
+				print(" >>>>>> admin_required() = Token Inválido!! Tire o comentário na função para ver detalhes da exception")
+				#print(str(e))
+				return json.dumps({'token_required': True, 'Exception': str(e)}), 200, {'ContentType': 'application/json'}
+				# return jsonify({'message': 'Token inválido.'}), 401
+
+			return f(current_user, *args, **kwargs)
+		#end wrapper
+
+		return wrapper
+	#end admin_decorator
+
+	return admin_decorator
+#end admin_required
 
 def token_required(f):
 	@wraps(f)
@@ -257,6 +298,8 @@ def postAddress(current_user):
 		'state':request.form['estado'],
 		'num':request.form['numero']
 	}
+
+	print(request.form)
 	
 	response_request = None
 	try:
@@ -295,6 +338,7 @@ def getAddress(current_user):
 @app.route('/ServiceSchedule', methods=['POST'])
 @token_required
 def postServiceSchedule(current_user):
+
 	try:
 		is_period_empty = is_parameter_empty(request.form['periodoId'])
 		period_id = int(request.form['periodoId']) if not is_period_empty else None
@@ -320,6 +364,7 @@ def postServiceSchedule(current_user):
 		'week_day':week_day
 	}
 	response_request = None
+
 	try:
 		schedule_data['schedule_id'] = request.form['serviceSchedule'] 
 		response_request = b_horarioServico.updateSchedule(schedule_data)
@@ -362,8 +407,6 @@ def getServiceSchedule():
 
 	is_day_empty = is_parameter_empty(request.args.get('weekDay'))
 	week_day = request.args.get('weekDay') if not is_day_empty else None
-
-
 
 	if(is_schedule_empty and is_begin_empty and is_end_empty and is_day_empty and is_periodo_empty):
 		print('empty request')
@@ -550,7 +593,7 @@ def removeService(current_user):
 
 # Rota para criacao e atualizacao de Tipo de Serviço
 @app.route('/TypeService', methods=['POST'])
-@token_required
+@admin_required(True)
 def postTypeService(current_user):
 	#Apenas admin pode adicionar novos tipos de serivo.
 	if(current_user['admin'] == 1):
@@ -618,7 +661,6 @@ def postUser():
 		return json.dumps({'success': request_result}), 200, {'ContentType': 'application/json'}
 	except Exception as err:
 		return erro_interno(err)
-
 # Rota para criacao de usuario google
 @app.route('/guser', methods=['POST'])
 def postGoogleUser():
@@ -649,6 +691,7 @@ def postGoogleUser():
 	
 	token = jwt.encode({'user_id': data_result['user_id'], 'email_user' : data_result['email'], 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=session_time_minute)}, app.secret_key)		
 	return json.dumps({'success': True, 'token': token.decode('UTF-8')}), 200, {'ContentType': 'application/json'}
+
 
 #Apagar um usuario nao significa remover da base e sim desativar
 @app.route('/remove/user', methods=['POST'])
@@ -683,10 +726,9 @@ def getUser():
 
 	is_id_empty = is_parameter_empty(request.args.get('userId'))
 	user_id = request.args.get('userId') if not is_id_empty else None
-	
+
 	is_gid_empty = is_parameter_empty(request.args.get('g_id'))
 	g_id = request.args.get('g_id') if not is_gid_empty else None
-
 
 	if( is_name_empty and is_email_empty and is_about_empty and is_id_empty and is_gid_empty):
 		print('empty')
@@ -733,7 +775,7 @@ def loginUser():
 		if data_result:
 			# the token time is defined by session_time_minute variable
 			token = jwt.encode({'user_id': data_result['user_id'], 'email_user' : data_result['email'], 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=session_time_minute)}, app.secret_key)		
-			return json.dumps({'success': True, 'token': token.decode('UTF-8')}), 200, {'ContentType': 'application/json'}
+			return json.dumps({'success': True, 'token': token.decode('UTF-8'), 'admin': data_result['admin']}), 200, {'ContentType': 'application/json'}
 		else:
 			return json.dumps({'success': False}), 200, {'ContentType': 'application/json'}
 #end-loginuser
@@ -741,6 +783,15 @@ def loginUser():
 @app.route('/getsession', methods=['GET'])
 @token_required
 def getSession(current_user):
+	if current_user:
+		return json.dumps({'success': True}), 200, {'ContentType': 'application/json'}
+
+	return json.dumps({'success': False}), 200, {'ContentType': 'application/json'}
+#end-getrSession
+
+@app.route('/getsessionadmin', methods=['GET'])
+@admin_required(True)
+def getsessionadmin(current_user):
 	if current_user:
 		return json.dumps({'success': True}), 200, {'ContentType': 'application/json'}
 
@@ -792,7 +843,6 @@ def postContratacao(current_user):
 		have_empty_data = have_empty_data or  is_token_empty or is_buyer_empty or is_service_empty or is_method_empty or is_status_empty
 		if(have_empty_data):
 			raise Exception('[CONTRATACAO - POST] Empty required parameter')
-		
 	except Exception as err:
 		print(err)
 		handle_invalid(err)
