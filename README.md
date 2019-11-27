@@ -4,3 +4,4 @@
 
 ## Deploy
 O deploy da aplicação foi realizado seguindo o tutorial disponivel através do link https://medium.com/@gitaumoses4/deploying-a-flask-application-on-heroku-e509e5c76524 . Salvo algumas alterações no procfile.
+
